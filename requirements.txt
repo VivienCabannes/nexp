@@ -1,0 +1,7 @@
+
+jupyterlab
+matplotlib
+pytorch
+pytorch-cuda
+torchvision
+torchaudio

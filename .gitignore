@@ -1,0 +1,9 @@
+
+dist/
+*.egg-info
+*__pycache__
+
+logs/
+launchers/
+notebooks/
+savings/
