@@ -1,5 +1,5 @@
 
-# Neural Networks experiments
+# Neural Networks Experiments
 
 This repository aims at providing simple functions to easily try out new ideas related to deep learning.
 
@@ -11,7 +11,7 @@ TODO: Installation through pip, should be put in pypi at the end.
 
 ## Quickstart
 
-#### Train ImageNet on one GPU
+#### Train CIFAR on one GPU
 Pure pytorch
 
 #### Train ImageNet with fast loader on one GPU

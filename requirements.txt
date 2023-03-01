@@ -1,6 +1,7 @@
 
 jupyterlab
 matplotlib
+numba
 pytorch
 pytorch-cuda
 torchvision
