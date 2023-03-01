@@ -5,7 +5,6 @@ Will probably be renamed to `cifar.py`.
 """
 import os
 import json
-import pathlib
 from typing import Tuple
 
 import torchvision.datasets as datasets

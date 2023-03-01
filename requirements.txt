@@ -1,8 +1,8 @@
 
-jupyterlab
-matplotlib
-numba
+# jupyterlab
+# matplotlib
+# numba
 pytorch
 pytorch-cuda
 torchvision
-torchaudio
+# torchaudio
