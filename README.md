@@ -11,15 +11,22 @@ TODO: Installation through pip, should be put in pypi at the end.
 
 ## Quickstart
 
-#### Train CIFAR on one GPU
-Pure pytorch
+- [DONE] Train CIFAR on one GPU
+- [DONE] Train CIFAR on several GPUs
 
-#### Train ImageNet with fast loader on one GPU
-FFCV or NVIDIA-DALI
+- Do it in SSL mode
 
-#### Train ImageNet with fast loader on one GPU
+- Look at classification results with SSL full graph
 
-#### Train ImageNet on several GPUs
+- Do it with checkpoints.
+
+- Incorporate fast data loaders such as FFCV or NVIDIA-DALI
+- Add profiler to find ideal batch-size, for each model
+
+#### Deal with datasets
+Vision: ImageNet, MNIST
+
+#### Try
 
 ## Projects
 
@@ -29,3 +36,5 @@ TODO
 #### Memorization in Transformers
 TODO
 
+#### Laplacian spectral embedding
+TODO

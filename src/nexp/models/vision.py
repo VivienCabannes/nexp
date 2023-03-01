@@ -1,60 +1,72 @@
 
-from typing import Tuple, Union
+from typing import Tuple
+
 import torch.nn as nn
 import torchvision
 
 
-def get_model(name: str, headless: bool = False) -> Union[nn.Module, Tuple[nn.Module, int]]:
+def model(name: str) -> nn.Module:
     """Get classical neural network model
 
     Parameters
     ----------
-    name: Model name as in torchvision
-    headless: Specify if last classifier layer should removed
+    name: Model name as in `torchvision`
 
     Returns
     -------
     model: Parametric module to be learned
-    fan_in: Number of output neurons (returned if headless = True)
+    """
+    return torchvision.models.__dict__[name]()
+
+
+def headless_model(name: str) -> Tuple[nn.Module, int]:
+    """Get classical neural network model without classification head
+
+    Parameters
+    ----------
+    name: Model name as in `torchvision`
+
+    Returns
+    -------
+    model: Parametric module to be learned
+    fan_in: Number of output neurons, useful to build a new head on top of the model
     """
     model = torchvision.models.__dict__[name]()
 
-    if headless:
-        match name[:3]:
-            case "ale":
-                fan_in = model.classifier[1].in_features
-                model.classifier = nn.Identity()
-            case "con" | "eff" | "mna" | "mob":
-                fan_in = model.classifier[-1].in_features
-                model.classifier = nn.Identity()
-            case "den":
-                fan_in = model.classifier.in_features
-                model.classifier = nn.Identity()
-            case "goo" | "inc" | "reg" | "res" | "wid" | "shu":
-                fan_in = model.fc.in_features
-                model.fc = nn.Identity()
-            case "swi":
-                fan_in = model.head.in_features
-                model.head = nn.Identity()
-            case "vit":
-                fan_in = model.heads.head.in_features
-                model.heads.head = nn.Identity()
-            case "vgg":
-                fan_in = model.classifier[0].in_features
-                model.classifier = nn.Identity()
-            case _:
-                raise NotImplementedError(f"Headless option is not implemented for model {name}.")
-        return model, fan_in
+    match name[:3]:
+        case "ale":
+            fan_in = model.classifier[1].in_features
+            model.classifier = nn.Identity()
+        case "con" | "eff" | "mna" | "mob":
+            fan_in = model.classifier[-1].in_features
+            model.classifier = nn.Identity()
+        case "den":
+            fan_in = model.classifier.in_features
+            model.classifier = nn.Identity()
+        case "goo" | "inc" | "reg" | "res" | "wid" | "shu":
+            fan_in = model.fc.in_features
+            model.fc = nn.Identity()
+        case "swi":
+            fan_in = model.head.in_features
+            model.head = nn.Identity()
+        case "vit":
+            fan_in = model.heads.head.in_features
+            model.heads.head = nn.Identity()
+        case "vgg":
+            fan_in = model.classifier[0].in_features
+            model.classifier = nn.Identity()
+        case _:
+            raise NotImplementedError(f"Headless option is not implemented for model {name}.")
 
-    return model
+    return model, fan_in
 
 
-def preprocessing(name: str) -> torchvision.transforms._presets.ImageClassification:
+def model_preprocessing(name: str) -> torchvision.transforms._presets.ImageClassification:
     """Get function to transform input to map specific model specifications
 
     Parameters
     ----------
-    name: Model name as in torchvision
+    name: Model name as in `torchvision`
 
     Returns
     -------
@@ -232,3 +244,29 @@ def preprocessing(name: str) -> torchvision.transforms._presets.ImageClassificat
             raise NotImplementedError(f"No implementation for model {name}.")
 
     return torchvision.models.__dict__[weight_name].DEFAULT.transforms()
+
+
+def ssl_head(size: list[int]) -> nn.Module:
+    """Build SSL head according to specification in `size`.
+
+    Self-supervised learning projectors are made of linear, batch-norm, and relu layers, stacked sequentially.
+
+    Parameters
+    ----------
+    size: numbers of neurons for input, hidden and output layers
+
+    Returns
+    -------
+    projector: head for neural network
+    """
+    if len(size) < 2:
+        raise ValueError(f"Size for projectors should be a list of at list two elements, not {size}")
+
+    layers = [nn.Linear(size[0], size[1])]
+    fan_in = size[1]
+    for fan_out in size[2:]:
+        layers.append(nn.BatchNorm1d(fan_in))
+        layers.append(nn.ReLU())
+        layers.append(nn.Linear(fan_in, fan_out, bias=False))
+        fan_in = fan_out
+    return nn.Sequential(*layers)
