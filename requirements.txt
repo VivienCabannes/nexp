@@ -4,5 +4,6 @@
 # numba
 pytorch
 pytorch-cuda
+submitit
 torchvision
 # torchaudio

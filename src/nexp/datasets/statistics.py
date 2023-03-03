@@ -1,10 +1,13 @@
 """
+Functions to datasets statistics.
+
 NB
 --
 Will probably be renamed to `cifar.py`.
 """
-import os
 import json
+import logging
+import os
 from typing import Tuple
 
 import torchvision.datasets as datasets
@@ -14,7 +17,9 @@ from nexp.config import (
     cifar10_path,
     cifar100_path,
 )
+
 MEAN_STD_PATH = DATA_DIR / "stats_mean_std.json"
+logger = logging.getLogger(__name__)
 
 
 def get_mean_std(name: str, dataset: datasets = None, recompute: bool = False) -> Tuple[list[int], list[int]]:
@@ -34,15 +39,18 @@ def get_mean_std(name: str, dataset: datasets = None, recompute: bool = False) -
     """
     path = MEAN_STD_PATH
     if not os.path.exists(path):
+        logger.debug(f"Creating {path}.")
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w') as f:
             json.dump({}, f)
     with open(path, 'r') as f:
         datasets_stats = json.load(f)
     if not recompute and name in datasets_stats:
+        logger.info(f"Loading datasets mean and std from {path}.")
         mean = datasets_stats[name]['mean']
         std = datasets_stats[name]['std']
     else:
+        logger.info(f"Computing datasets mean and std.")
         if name in ['cifar10', 'cifar100']:
             mean = dataset.data.mean(axis=(0, 1, 2)) / 255
             std = dataset.data.std(axis=(0, 1, 2)) / 255
@@ -50,6 +58,7 @@ def get_mean_std(name: str, dataset: datasets = None, recompute: bool = False) -
         else:
             raise NotImplementedError(f"Dataset {name} is not implemented.")
         with open(path, 'w') as f:
+            logger.debug(f"Saving datasets mean and std to {path}.")
             json.dump(datasets_stats, f, indent=4)
     return mean, std
 
@@ -62,6 +71,7 @@ def compute_mean_std(name: str) -> None:
     ----------
     name: name of the dataset as in `torchvision.datasets`
     """
+    logger.debug(f"Loading dataset {name}.")
     match name:
         case "cifar10":
             dataset = datasets.CIFAR10(root=cifar10_path, train=True, download=False)
