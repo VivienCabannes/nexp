@@ -40,13 +40,12 @@ def get_unique_path(file_path: str) -> Path:
     if not isinstance(file_path, Path):
         file_path = Path(file_path)
     path = file_path / day_id
-    if os.path.exists(path):
-        add_id = 1
-        while True:
-            add_id += 1
-            if not os.path.exists(path / str(add_id)):
-                path = path / str(add_id)
-                break
+    add_id = 0
+    while True:
+        add_id += 1
+        if not os.path.exists(path / str(add_id)):
+            path = path / str(add_id)
+            break
     return path
 
 

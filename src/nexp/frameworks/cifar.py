@@ -17,23 +17,14 @@ from nexp.config import (
     cifar10_path,
 )
 import nexp.datasets.statistics as datastats
-from nexp.utils import (
-    get_unique_path,
-) 
-from nexp.frameworks import TrainingFramework
+from nexp.launcher import SlurmLauncher
+from nexp.trainer import Trainer
+from nexp.utils import touch_file
 
-logging.basicConfig(
-    format="{asctime} {levelname} [{name}:{lineno}] {message}",
-    style='{',
-    datefmt='%H:%M:%S',
-    level="INFO",
-    handlers=[
-        # Log to stderr, which is catched by SLURM into log files
-        logging.StreamHandler(),
-    ],
-)
+logger = logging.getLogger(__name__)
 
-class CIFAR(TrainingFramework):
+
+class CIFAR(Trainer):
     """Abstract base class for training frameworks.
 
     Parameters
@@ -43,9 +34,16 @@ class CIFAR(TrainingFramework):
     def __init__(self, args: argparse.Namespace):
         self.config = args
         self.file_path = Path(__file__).resolve()
+
+    def launch_slurm(self):
+        """Launch the training on a SLURM cluster."""
+        self.register_logger()
+        launcher = SlurmLauncher(self.file_path, self.log_dir, self.config)
+        launcher()
     
     def __call__(self):
         self.register_logger()
+        touch_file(self.check_path)
         self.register_architecture()
         self.register_dataloader()
         self.register_optimizer()
@@ -70,13 +68,27 @@ class CIFAR(TrainingFramework):
                 # print statistics
                 running_loss += loss.item()
                 if i % 20 == 19:    # print every 2000 mini-batches
-                    logging.info(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+                    logger.info(f'epochs {epoch + 1:3d} ({i + 1:5d}) loss: {running_loss / 2000:.3f}')
                     running_loss = 0.0
-                # Add checkpoints there
-                # Compute training loss and accuracy only when needed.
 
-        logging.info('Finished Training')
+                    self.save_checkpoint(self.check_path, {
+                        'epoch': epoch,
+                        'arch': self.config.architecture,
+                        'iter': i,
+                        'state_dict': self.model.state_dict(),
+                        'optimizer': self.optimizer.state_dict(),
+                        # 'scheduler': self.scheduler.state_dict(),
+                    })
 
+        logger.info('Finished Training')
+        logger.info(f'Saving model ({self.bestcheck_path})')
+        self.save_checkpoint(self.bestcheck_path, {
+            'epoch': epoch,
+            'arch': self.config.architecture,
+            'state_dict': self.model.state_dict(),
+        })
+
+        logger.info('Testing model')
         correct = 0
         total = 0
         # since we're not training, we don't need to calculate the gradients for our outputs
@@ -94,6 +106,7 @@ class CIFAR(TrainingFramework):
 
     def register_architecture(self):
         """Register neural network architecture."""
+        logger.info("Registering architecture.")
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         num_gpus = torch.cuda.device_count()
@@ -109,6 +122,8 @@ class CIFAR(TrainingFramework):
 
     def register_dataloader(self):
         """Register dataloader for training and validation."""
+        logger.info("Registering dataloaders.")
+
         dataset_name = "cifar10"
         mean, std = datastats.compute_mean_std(dataset_name)
 
@@ -130,6 +145,7 @@ class CIFAR(TrainingFramework):
 
     def register_optimizer(self):
         """Register optimizer."""
+        logger.info("Registering optimizer")
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.learning_rate, momentum=0.9)
 
@@ -137,6 +153,18 @@ class CIFAR(TrainingFramework):
 if __name__=="__main__":
     import nexp.parser as nparser
 
+    logging.basicConfig(
+        format="{asctime} {levelname} [{name:10s}:{lineno}] {message}",
+        style='{',
+        datefmt='%H:%M:%S',
+        level="INFO",
+        handlers=[
+            # Log to stderr, which is catched by SLURM into log files
+            logging.StreamHandler(),
+        ],
+    )
+
+    logger.info("Parsing arguments")
     parser = argparse.ArgumentParser(
         description="Training configuration",
     ) 
