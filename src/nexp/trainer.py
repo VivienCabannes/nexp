@@ -1,25 +1,20 @@
 
 import argparse
 import logging
-import os
-from pathlib import Path
 
 import torch
 
-from nexp.config import (
-    CHECK_DIR,
-    LOG_DIR,
-)
+from nexp.config import CHECK_DIR, LOG_DIR
 from nexp.launcher import SlurmLauncher
-from nexp.utils import (
-    get_unique_path,
-    touch_file,
-)
+from nexp.utils import get_unique_path, touch_file
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class Trainer:
     """Abstract base class for training frameworks.
+
     Parameters
     ----------
     args: Arguments from parser instanciated with `nexp.parser`.
@@ -33,6 +28,26 @@ class Trainer:
         launcher = SlurmLauncher(self.file_path, self.log_dir, self.config)
         launcher()
     
+    def register(self, mode: str = "both"):
+        """Register all components of the training framework.
+        
+        Parameters
+        ----------
+        train: flag to specify registration for training.
+        """
+        tmp = {"train": "training", "test": "testing", "both": "traning and testing"}[mode]
+        logger.info(f"registration for {tmp}")
+
+        self.register_logger()
+        self.register_device()
+        self.register_architecture()
+        if mode in ["train", "both"]:
+            self.trainloader = self.register_dataloader(train=True)
+            self.register_optimizer()
+            self.register_scheduler()
+        if mode in ["test", "both"]:
+            self.testloader = self.register_dataloader(train=False)
+
     def register_logger(self):
         """Register logging and checkpoints paths.
         
@@ -42,11 +57,26 @@ class Trainer:
         - Allow saving and loading from different files.
         """
         logger.debug("Registering loggers")
+
         self.log_dir = get_unique_path(LOG_DIR / self.config.job_name)
 
         self.check_dir = get_unique_path(CHECK_DIR / self.config.job_name)
         self.check_path = self.check_dir / "checkpoint.pth"
         self.bestcheck_path = self.check_dir / "model_best.pth"
+        touch_file(self.check_path)
+
+    def register_device(self):
+        """Register device to use.
+        
+        TODO
+        ----
+        - Think about single/multi GPU/Nodes.
+        """
+        logger.debug("Registering device")
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        num_gpus = torch.cuda.device_count()
+        logging.info(f"using {self.device}, {num_gpus} GPUs available")
 
     def save_checkpoint(self, full: bool = False, epoch: int = 0, file_path: str = None):
         """Save checkpoint.
@@ -56,9 +86,10 @@ class Trainer:
         full: Either to save optimizer state or not.
         epoch: Number of epoch in training.
         file_path: Path to save checkpoint to.
+
         TODO
         ----
-        - Add accuracy to easily see if one beat best model by training more.
+        - Add accuracy to easily see if one beats best model by training more.
         """
         if full:
             state = {

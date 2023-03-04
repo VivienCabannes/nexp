@@ -6,7 +6,7 @@ import nexp.parser as nparser
 from nexp.frameworks.cifar import CIFAR
 
 logging.basicConfig(
-    format="{asctime} {levelname: 8s} [{name:10s}:{lineno:3d}] {message}",
+    format="{asctime} {levelname} [{name:10s}:{lineno:3d}] {message}",
     style='{',
     datefmt='%H:%M:%S',
     level="INFO",
