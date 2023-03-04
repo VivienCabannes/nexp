@@ -34,12 +34,6 @@ class CIFAR(Trainer):
     def __init__(self, args: argparse.Namespace):
         self.config = args
         self.file_path = Path(__file__).resolve()
-
-    def launch_slurm(self):
-        """Launch the training on a SLURM cluster."""
-        self.register_logger()
-        launcher = SlurmLauncher(self.file_path, self.log_dir, self.config)
-        launcher()
     
     def __call__(self):
         if self.config.slurm:
@@ -50,46 +44,51 @@ class CIFAR(Trainer):
         self.register_architecture()
         self.register_dataloader()
         self.register_optimizer()
+        self.register_scheduler()
 
+        self.load_checkpoint()
+
+        logger.info("starting training.")
         for epoch in range(self.config.epochs):  # loop over the dataset multiple times
 
             running_loss = 0.0
             for i, data in enumerate(self.trainloader, 0):
-                # get the inputs; data is a list of [inputs, labels]
+                logger.debug("loading batch to devices")
                 inputs, labels = data[0].to(self.device),data[1].to(self.device)
 
-                # zero the parameter gradients
+                logger.debug("set gradient accumulator to zero")
                 self.optimizer.zero_grad()
 
-                # forward + backward + optimize
+                logger.debug("forward pass")
                 outputs = self.model(inputs)
-
                 loss = self.criterion(outputs, labels)
+
+                logger.debug("backward pass")
                 loss.backward()
                 self.optimizer.step()
 
-                # print statistics
-                running_loss += loss.item()
-                if i % 20 == 19:    # print every 2000 mini-batches
-                    logger.info(f'epochs {epoch + 1:3d} ({i + 1:5d}) loss: {running_loss / 2000:.3f}')
-                    running_loss = 0.0
+            if epoch % self.config.checkpoint_frequency == self.config.checkpoint_frequency - 1:
+                logger.debug("saving model")
+                self.save_checkpoint(full=True, epoch=epoch)
 
-                    self.save_checkpoint(self.check_path, {
-                        'epoch': epoch,
-                        'arch': self.config.architecture,
-                        'iter': i,
-                        'state_dict': self.model.state_dict(),
-                        'optimizer': self.optimizer.state_dict(),
-                        # 'scheduler': self.scheduler.state_dict(),
-                    })
+                # # print statistics
+                # running_loss += loss.item()
+                # if i % 20 == 19:    # print every 2000 mini-batches
+                #     logger.info(f'epochs {epoch + 1:3d} ({i + 1:5d}) loss: {running_loss / 2000:.3f}')
+                #     running_loss = 0.0
+
+                #     self.save_checkpoint(self.check_path, {
+                #         'epoch': epoch,
+                #         'arch': self.config.architecture,
+                #         'iter': i,
+                #         'state_dict': self.model.state_dict(),
+                #         'optimizer': self.optimizer.state_dict(),
+                #         # 'scheduler': self.scheduler.state_dict(),
+                #     })
 
         logger.info('Finished Training')
         logger.info(f'Saving model ({self.bestcheck_path})')
-        self.save_checkpoint(self.bestcheck_path, {
-            'epoch': epoch,
-            'arch': self.config.architecture,
-            'state_dict': self.model.state_dict(),
-        })
+        self.save_checkpoint(full=False, file_path=self.bestcheck_path)
 
         logger.info('Testing model')
         correct = 0
@@ -109,7 +108,7 @@ class CIFAR(Trainer):
 
     def register_architecture(self):
         """Register neural network architecture."""
-        logger.info("Registering architecture.")
+        logger.debug("registering architecture")
 
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         num_gpus = torch.cuda.device_count()
@@ -125,7 +124,7 @@ class CIFAR(Trainer):
 
     def register_dataloader(self):
         """Register dataloader for training and validation."""
-        logger.info("Registering dataloaders.")
+        logger.debug("registering dataloaders")
 
         dataset_name = "cifar10"
         mean, std = datastats.compute_mean_std(dataset_name)
@@ -148,16 +147,21 @@ class CIFAR(Trainer):
 
     def register_optimizer(self):
         """Register optimizer."""
-        logger.info("Registering optimizer")
+        logger.debug("registering optimizer")
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.learning_rate, momentum=0.9)
+
+    def register_scheduler(self):
+        """Register scheduler."""
+        logger.debug("registering scheduler")
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
 
 if __name__=="__main__":
     import nexp.parser as nparser
 
     logging.basicConfig(
-        format="{asctime} {levelname} [{name:10s}:{lineno}] {message}",
+        format="{asctime} {levelname: 8s} [{name:10s}:{lineno:3d}] {message}",
         style='{',
         datefmt='%H:%M:%S',
         level="INFO",
