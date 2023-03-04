@@ -1,19 +1,13 @@
 
 import argparse
-from datetime import datetime
-from pathlib import Path
-import os
 
-from nexp.config import (
-    CHECK_DIR,
-    LOG_DIR,
-)
+from nexp.config import CHECK_DIR, LOG_DIR
+
+SLURM_ONLY = []
+ctl = True
 
 
-# Useful variable for debugging
-ctl = False
-
-def decorate_parser(parser: argparse.ArgumentParser, training: bool = True) -> None:
+def decorate_parser(parser: argparse.ArgumentParser, training: bool = True):
     """Create parser with basic configuration.
     
     Parameters
@@ -30,7 +24,7 @@ def decorate_parser(parser: argparse.ArgumentParser, training: bool = True) -> N
     logger_config(parser)
 
 
-def architecture_config(parser: argparse.ArgumentParser) -> None:
+def architecture_config(parser: argparse.ArgumentParser):
     # Setting details
     setting = parser.add_argument_group("Architecture")
     setting.add_argument(
@@ -40,16 +34,12 @@ def architecture_config(parser: argparse.ArgumentParser) -> None:
     setting.add_argument("--float16", action="store_true")
 
 
-def optimizer_config(parser: argparse.ArgumentParser) -> None:
+def optimizer_config(parser: argparse.ArgumentParser):
     # Optimizer details
     optimizer = parser.add_argument_group("Optimizer")
     optimizer.add_argument(
         "-bs", "--batch-size", default=64, required=ctl, type=int,
         help="batch size (per GPU)", metavar="\b",
-    )
-    optimizer.add_argument(
-        "--full-batch-size", default=64, type=int,
-        help="batch size (across GPUs)", metavar="\b",
     )
     optimizer.add_argument(
         "-e", "--epochs", default=1, required=ctl, type=int,
@@ -74,9 +64,13 @@ def optimizer_config(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def cluster_config(parser: argparse.ArgumentParser) -> None:
+def cluster_config(parser: argparse.ArgumentParser):
     # Cluster details
     cluster = parser.add_argument_group("Cluster settings")
+    cluster.add_argument(
+        "--slurm", action="store_true",
+        help="generate sbatch script and launch it",
+    )
     cluster.add_argument(
         "--local", action="store_true",
         help="run experiments locally",
@@ -114,33 +108,35 @@ def cluster_config(parser: argparse.ArgumentParser) -> None:
         help="location of log redirection", metavar="\b",
     )
 
+SLURM_ONLY += ["slurm", "local", "job_name", "nodes", "gpus_per_node", "ntasks_per_node", "constraint", "partition", "time",]
 
-def logger_config(parser: argparse.ArgumentParser) -> None:
+
+def logger_config(parser: argparse.ArgumentParser):
     logger = parser.add_argument_group("Logs")
     logger.add_argument(
-        "--check-freq", type=int, default=1,
+        "-cf", "--checkpoint-frequency", type=int, default=-1,
         help="checkpoint frequency in number of epochs", metavar="\b",
     )
     logger.add_argument(
-        "--log-freq", default=10, type=int, 
-        help="log frequency in number of epochs", metavar="\b",
-    )
-    logger.add_argument(
-        "--check", default=CHECK_DIR, type=str,
-        help="location of checkpoint", metavar="\b",
+        "-c", "--checkpoint", default="", type=str,
+        help=f"location of checkpoint (relative to {CHECK_DIR})", metavar="\b",
     )
     logger.add_argument(
         "--seed", type=int, default=-1, 
         help="seed to fix randomness", metavar="\b",
     )
+    logger.add_argument(
+        "--log-freq", default=10, type=int, 
+        help="log frequency in number of epochs", metavar="\b",
+    )
 
 
-def fill_namespace(args: argparse.Namespace) -> None:
+def fill_namespace(args: argparse.Namespace):
     """Fill namespace with deterministic variables."""
     fill_cpus(args)
 
 
-def fill_cpus(args: argparse.Namespace) -> None:
+def fill_cpus(args: argparse.Namespace):
     """Compute CPUs number and RAM based on number of GPUs
     
     The function saved the result in `args.cpus_per_task`.
@@ -155,5 +151,7 @@ def fill_cpus(args: argparse.Namespace) -> None:
     """
     num_gpus = args.gpus_per_node * args.nodes
     args.cpus_per_task = 8 * num_gpus
-    args.mem = str(32 * num_gpus) + "G"
+    args.mem = str(64 * num_gpus) + "G"
     args.full_batch_size = args.batch_size * num_gpus
+
+SLURM_ONLY += ["cpus_per_task", "mem", "full_batch_size",]

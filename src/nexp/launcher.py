@@ -3,12 +3,9 @@ import argparse
 import os
 from pathlib import Path
 
-from nexp.config import (
-    EMAIL,
-)
-from nexp.utils import (
-    touch_file,
-)
+from nexp.config import EMAIL
+from nexp.parser import SLURM_ONLY
+from nexp.utils import touch_file
 
 
 class SlurmLauncher:
@@ -56,7 +53,7 @@ class SlurmLauncher:
 
             # Parse argument strings
             arg_string = self.recreate_args(self.config)
-            f.write(f"python {self.file_path} {arg_string} --autolaunch\n")
+            f.write(f"python {self.file_path} {arg_string}\n")
 
         os.system(f"sbatch {launcher_path}")
 
@@ -70,14 +67,14 @@ class SlurmLauncher:
         """
         arg_string = ""
         for key, value in vars(config).items():
-            if key in [
-                "local", "job_name", "nodes", "gpus_per_node", "ntasks_per_node",
-                "constraint", "partition", "time", "cpus_per_task", "mem"
-            ]:
+            if key in SLURM_ONLY:
                 # Skip arguments related to the cluster
                 continue
             if isinstance(value, bool) and not value:
                 # Skip arguments for which `action=store_true` if `False`
+                continue
+            if isinstance(value, str) and not value:
+                # Skip empty string argument
                 continue
             if isinstance(value, int) and value == -1:
                 # Integer arguments set to `-1` should be ignored

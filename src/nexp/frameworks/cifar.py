@@ -42,6 +42,9 @@ class CIFAR(Trainer):
         launcher()
     
     def __call__(self):
+        if self.config.slurm:
+            self.launch_slurm()
+            return
         self.register_logger()
         touch_file(self.check_path)
         self.register_architecture()
@@ -169,14 +172,8 @@ if __name__=="__main__":
         description="Training configuration",
     ) 
     nparser.decorate_parser(parser)
-    parser.add_argument("--autolaunch", action="store_true")
     args = parser.parse_args()
     nparser.fill_namespace(args)
 
     framework = CIFAR(args)
-    if args.autolaunch:
-        # Launch calculations 
-        framework()
-    else:
-        # Setup slurm launcher
-        framework.launch_slurm()
+    framework()
