@@ -11,34 +11,26 @@ import torchvision.transforms as transforms
 
 import nexp.models.vision as vision_models
 from nexp.config import cifar10_path
-import nexp.datasets.statistics as datastats
+import nexp.datasets.datastats as datastats
 from nexp.trainer import Trainer
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cifar")
 logger.setLevel(logging.INFO)
 
 
 class CIFAR(Trainer):
-    """Abstract base class for training frameworks.
+    """Training frameworks for CIFAR.
 
     Parameters
     ----------
     args: Arguments from parser instanciated with `nexp.parser`.
     """
     def __init__(self, args: argparse.Namespace):
-        self.config = args
+        super().__init__(args)
         self.file_path = Path(__file__).resolve()
     
-    def __call__(self):
-        if self.config.slurm:
-            self.launch_slurm()
-            return
-        self.register(mode="both")
-        self.train()
-        self.test()
-
     def train(self):
-        logger.info("Training model")
+        logger.info("training model")
 
         self.model.train()
         for epoch in range(self.config.epochs):  # loop over the dataset multiple times
@@ -60,7 +52,7 @@ class CIFAR(Trainer):
                 self.optimizer.step()
 
             if epoch % self.config.checkpoint_frequency == self.config.checkpoint_frequency - 1:
-                logger.debug("saving model")
+                logger.info(f"saving model at epoch {epoch + 1}")
                 self.save_checkpoint(full=True, epoch=epoch)
 
                 # # print statistics
@@ -69,12 +61,12 @@ class CIFAR(Trainer):
                 #     logger.info(f'epochs {epoch + 1:3d} ({i + 1:5d}) loss: {running_loss / 2000:.3f}')
                 #     running_loss = 0.0
 
-        logger.info('Finished Training')
-        logger.info(f'Saving model ({self.bestcheck_path})')
+        logger.info('finished Training')
+        logger.info(f'saving model ({self.bestcheck_path})')
         self.save_checkpoint(full=False, file_path=self.bestcheck_path)
 
     def test(self):
-        logger.info('Testing model')
+        logger.info('testing model')
 
         self.model.eval()
         correct = 0
@@ -94,7 +86,7 @@ class CIFAR(Trainer):
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
 
-        logging.info(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+        logging.info(f'accuracy of the network on the 10000 test images: {100 * correct // total} %')
 
     def register_architecture(self):
         """Register neural network architecture.
@@ -128,7 +120,7 @@ class CIFAR(Trainer):
         logger.debug("registering dataloaders")
 
         dataset_name = "cifar10"
-        mean, std = datastats.compute_mean_std(dataset_name)
+        mean, std = datastats.compute_mean_std(dataset_name, recompute=False)
 
         transform = transforms.Compose([
             transforms.ToTensor(),

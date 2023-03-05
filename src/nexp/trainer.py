@@ -8,7 +8,7 @@ from nexp.config import CHECK_DIR, LOG_DIR
 from nexp.launcher import SlurmLauncher
 from nexp.utils import get_unique_path, touch_file
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("trainer")
 logger.setLevel(logging.INFO)
 
 
@@ -20,20 +20,34 @@ class Trainer:
     args: Arguments from parser instanciated with `nexp.parser`.
     """
     def __init__(self, args: argparse.Namespace):
-        pass
+        self.config = args
     
     def launch_slurm(self):
         """Launch the training on a SLURM cluster."""
         self.register_logger()
         launcher = SlurmLauncher(self.file_path, self.log_dir, self.config)
         launcher()
+
+    def __call__(self):
+        if self.config.slurm:
+            self.launch_slurm()
+            return
+        self.register(mode="both")
+        self.train()
+        self.test()
+
+    def train(self):
+        raise NotImplementedError
+
+    def test(self):
+        raise NotImplementedError
     
     def register(self, mode: str = "both"):
         """Register all components of the training framework.
         
         Parameters
         ----------
-        train: flag to specify registration for training.
+        mode: flag in `["train", "test", "both"]` to specify registration for training, testing or both.
         """
         tmp = {"train": "training", "test": "testing", "both": "traning and testing"}[mode]
         logger.info(f"registration for {tmp}")
@@ -76,7 +90,23 @@ class Trainer:
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         num_gpus = torch.cuda.device_count()
-        logging.info(f"using {self.device}, {num_gpus} GPUs available")
+        logger.info(f"using {self.device}, {num_gpus} GPUs available")
+
+    def register_architecture(self):
+        """Register neural network architecture."""
+        raise NotImplementedError
+
+    def register_dataloader(self):
+        """Register dataloader for training and validation."""
+        raise NotImplementedError
+
+    def register_optimizer(self):
+        """Register optimizer."""
+        raise NotImplementedError
+
+    def register_scheduler(self):
+        """Scheduler optimizer."""
+        raise NotImplementedError
 
     def save_checkpoint(self, full: bool = False, epoch: int = 0, file_path: str = None):
         """Save checkpoint.
@@ -114,6 +144,10 @@ class Trainer:
         Parameters
         ----------
         file_name: path of the file to load checkpoint from.
+
+        TODO
+        ----
+        Modify it in concordance with modification brought to `save_checkpoint`
         """
         if self.config.checkpoint:
             load_path = CHECK_DIR / self.config.checkpoint
@@ -136,18 +170,3 @@ class Trainer:
             self.scheduler.load_state_dict(checkpoint['scheduler'])
         else:
             logging.debug(f"no optimizer state found in checkpoint")
-
-    def register_architecture(self):
-        """Register neural network architecture."""
-        raise NotImplementedError
-
-    def register_dataloader(self):
-        """Register dataloader for training and validation."""
-        raise NotImplementedError
-
-    def register_optimizer(self):
-        """Register optimizer."""
-        raise NotImplementedError
-    
-    def __call__(self):
-        raise NotImplementedError
